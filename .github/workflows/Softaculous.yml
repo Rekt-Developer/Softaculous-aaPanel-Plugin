@@ -37,16 +37,12 @@ jobs:
 
     - name: Validate Project Structure
       run: |
-        test -f VERSION || { 
-          echo "1.0.0" > VERSION
-        }
-        test -f requirements.txt || {
-          cat > requirements.txt << EOF
+        test -f VERSION || echo "1.0.0" > VERSION
+        test -f requirements.txt || cat > requirements.txt << EOF
 requests==2.31.0
 PyYAML==6.0.1
 python-dotenv==1.0.0
 EOF
-        }
 
     - name: Generate Version
       id: version
