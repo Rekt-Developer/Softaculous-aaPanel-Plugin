@@ -22,33 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate-and-prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Validate Project Structure
-      run: |
-        test -f VERSION || echo "1.0.0" > VERSION
-        test -f requirements.txt || cat > requirements.txt << EOF
-
-    - name: Generate Version
-      id: version
-      run: |
-        VERSION=$(cat VERSION)
-        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-        echo "Current version: $VERSION"
-
-  build-plugin:
-    needs: validate-and-prepare
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Repository
@@ -58,210 +32,29 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
 
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pylint requests pytest
+        pip install requests PyYAML python-dotenv
 
-    - name: Create Comprehensive Plugin Structure
+    - name: Run Build Script
+      run: python build_plugin.py
+
+    - name: Set up Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Commit and Push Changes
+      run: |
+        git add .
+        git commit -m "Build and release version $(cat VERSION)"
+        git push
+
+    - name: Create Release
+      run: |
+        gh release create v$(cat VERSION) --title "Release v$(cat VERSION)" --notes "Release version $(cat VERSION)"
       env:
-        VERSION: ${{ needs.validate-and-prepare.outputs.version }}
-      run: |
-        PLUGIN_DIR="softaculous"
-        mkdir -p "$PLUGIN_DIR"
-
-        cat > "$PLUGIN_DIR/softaculous_main.py" << 'EOF'
-#!/usr/bin/python3
-# coding: utf-8
-import os
-import sys
-import json
-import requests
-import logging
-from typing import Dict, List, Any
-
-class SoftaculousPlugin:
-    def __init__(self):
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            filename='/var/log/softaculous_plugin.log'
-        )
-        self.logger = logging.getLogger(__name__)
-        self.config = {
-            'api_endpoint': 'https://api.softaculous.com/v1',
-            'cache_dir': '/tmp/softaculous_cache'
-        }
-        os.makedirs(self.config['cache_dir'], exist_ok=True)
-
-    def fetch_application_list(self) -> List[Dict[str, Any]]:
-        try:
-            response = requests.get(f"{self.config['api_endpoint']}/applications", timeout=10)
-            response.raise_for_status()
-            applications = response.json().get('applications', [])
-            self.logger.info(f"Fetched {len(applications)} applications")
-            return applications
-        except requests.RequestException as e:
-            self.logger.error(f"Error fetching applications: {e}")
-            return []
-
-    def install_application(self, app_name: str, domain: str, path: str = '/') -> Dict[str, Any]:
-        try:
-            payload = {'application': app_name, 'domain': domain, 'path': path}
-            response = requests.post(f"{self.config['api_endpoint']}/install", json=payload, timeout=30)
-            response.raise_for_status()
-            result = response.json()
-            self.logger.info(f"Installation of {app_name} initiated")
-            return {'status': 'success', 'message': f"{app_name} installation started", 'details': result}
-        except requests.RequestException as e:
-            error_msg = f"Installation failed: {e}"
-            self.logger.error(error_msg)
-            return {'status': 'error', 'message': error_msg}
-
-    def get_application_details(self, app_name: str) -> Dict[str, Any]:
-        try:
-            response = requests.get(f"{self.config['api_endpoint']}/applications/{app_name}", timeout=10)
-            response.raise_for_status()
-            details = response.json()
-            self.logger.info(f"Details for {app_name} retrieved")
-            return details
-        except requests.RequestException as e:
-            error_msg = f"Failed to retrieve {app_name} details: {e}"
-            self.logger.error(error_msg)
-            return {'error': error_msg}
-
-def get_list(args):
-    plugin = SoftaculousPlugin()
-    return plugin.fetch_application_list()
-
-def install(args):
-    plugin = SoftaculousPlugin()
-    return plugin.install_application(args.get('application', ''), args.get('domain', ''))
-
-def get_application_info(args):
-    plugin = SoftaculousPlugin()
-    return plugin.get_application_details(args.get('application', ''))
-EOF
-        chmod +x "$PLUGIN_DIR/softaculous_main.py"
-
-        cat > "$PLUGIN_DIR/info.json" << EOF
-{
-    "title": "Softaculous Application Installer",
-    "name": "softaculous",
-    "ps": "One-click installation for 400+ web applications",
-    "versions": "$VERSION",
-    "checks": "/www/server/panel/plugin/softaculous",
-    "author": "Softaculous Team",
-    "home": "https://softaculous.com"
-}
-EOF
-
-        cat > "$PLUGIN_DIR/index.html" << 'EOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Softaculous Application Installer</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        select, input { margin: 10px 0; padding: 5px; width: 100%; }
-        #result { background-color: #f4f4f4; padding: 10px; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <h1>Softaculous Web Application Installer</h1>
-    <form id="installForm">
-        <label for="application">Select Application:</label>
-        <select id="application" required>
-            <option value="">Choose an Application</option>
-            <option value="wordpress">WordPress</option>
-            <option value="joomla">Joomla</option>
-            <option value="drupal">Drupal</option>
-        </select>
-
-        <label for="domain">Domain:</label>
-        <input type="text" id="domain" placeholder="example.com" required>
-
-        <label for="path">Installation Path (Optional):</label>
-        <input type="text" id="path" placeholder="/" value="/">
-
-        <button type="submit">Install Application</button>
-    </form>
-
-    <div id="result"></div>
-
-    <script>
-        document.getElementById('installForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            var application = document.getElementById('application').value;
-            var domain = document.getElementById('domain').value;
-            var path = document.getElementById('path').value;
-
-            fetch('/plugin/softaculous/install', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ application: application, domain: domain, path: path })
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('result').innerHTML = `
-                    <h3>Installation Result</h3>
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
-                `;
-            })
-            .catch(error => {
-                document.getElementById('result').innerHTML = `
-                    <h3>Error</h3>
-                    <pre>${error}</pre>
-                `;
-            });
-        });
-    </script>
-</body>
-</html>
-EOF
-
-        cat > "$PLUGIN_DIR/install.sh" << 'EOF'
-#!/bin/bash
-set -e
-
-PLUGIN_DIR="/www/server/panel/plugin/softaculous"
-
-if [ "$(id -u)" != "0" ]; then
-   echo "This script must be run as root" 1>&2
-   exit 1
-fi
-
-check_dependencies() {
-    local dependencies=("python3" "pip" "curl")
-    for dep in "${dependencies[@]}"; do
-        if ! command -v "$dep" &> /dev/null; then
-            echo "Error: $dep is not installed"
-            exit 1
-        fi
-    done
-}
-
-install_python_deps() {
-    pip install requests PyYAML python-dotenv
-}
-
-main() {
-    echo "Starting Softaculous Plugin Installation..."
-    check_dependencies
-    install_python_deps
-    echo "Softaculous Plugin installed successfully."
-}
-
-main
-EOF
-
-        chmod +x "$PLUGIN_DIR/install.sh"
-
-    - name: Build Docker Image
-      run: |
-        docker build -t softaculous-plugin:$VERSION .
-        docker push softaculous-plugin:$VERSION
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
