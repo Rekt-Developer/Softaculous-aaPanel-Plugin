@@ -39,6 +39,16 @@ jobs:
         pip install -r requirements.txt
         pip install requests PyYAML python-dotenv
 
+    - name: Validate Docker Installation
+      run: |
+        if ! command -v docker &> /dev/null; then
+          echo "Docker is not installed. Installing Docker..."
+          sudo apt-get update
+          sudo apt-get install -y docker.io
+          sudo systemctl start docker
+          sudo systemctl enable docker
+        fi
+
     - name: Run Build Script
       run: python build_plugin.py
 
