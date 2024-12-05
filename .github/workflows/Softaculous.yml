@@ -37,9 +37,8 @@ jobs:
 
     - name: Validate Project Structure
       run: |
-        # Ensure critical files exist
         test -f VERSION || { 
-          echo "1.0.0" > VERSION  # Auto-generate if missing
+          echo "1.0.0" > VERSION
         }
         test -f requirements.txt || {
           cat > requirements.txt << EOF
@@ -79,15 +78,12 @@ EOF
       env:
         VERSION: ${{ needs.validate-and-prepare.outputs.version }}
       run: |
-        # Create plugin directory
         PLUGIN_DIR="softaculous"
         mkdir -p "$PLUGIN_DIR"
 
-        # Main Python Script with Comprehensive Functionality
         cat > "$PLUGIN_DIR/softaculous_main.py" << 'EOF'
 #!/usr/bin/python3
 # coding: utf-8
-
 import os
 import sys
 import json
@@ -97,133 +93,68 @@ from typing import Dict, List, Any
 
 class SoftaculousPlugin:
     def __init__(self):
-        # Configure logging
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             filename='/var/log/softaculous_plugin.log'
         )
         self.logger = logging.getLogger(__name__)
-        
-        # Configuration
         self.config = {
             'api_endpoint': 'https://api.softaculous.com/v1',
             'cache_dir': '/tmp/softaculous_cache'
         }
-        
-        # Ensure cache directory exists
         os.makedirs(self.config['cache_dir'], exist_ok=True)
 
     def fetch_application_list(self) -> List[Dict[str, Any]]:
-        """
-        Retrieve list of available applications from Softaculous API
-        
-        Returns:
-            List of application dictionaries
-        """
         try:
             response = requests.get(f"{self.config['api_endpoint']}/applications", timeout=10)
             response.raise_for_status()
-            
             applications = response.json().get('applications', [])
-            self.logger.info(f"Successfully fetched {len(applications)} applications")
-            
+            self.logger.info(f"Fetched {len(applications)} applications")
             return applications
         except requests.RequestException as e:
             self.logger.error(f"Error fetching applications: {e}")
             return []
 
     def install_application(self, app_name: str, domain: str, path: str = '/') -> Dict[str, Any]:
-        """
-        Install a specific web application
-        
-        Args:
-            app_name (str): Name of the application
-            domain (str): Domain to install application
-            path (str, optional): Installation path
-        
-        Returns:
-            Installation result dictionary
-        """
         try:
-            payload = {
-                'application': app_name,
-                'domain': domain,
-                'path': path
-            }
-            
-            response = requests.post(
-                f"{self.config['api_endpoint']}/install", 
-                json=payload, 
-                timeout=30
-            )
+            payload = {'application': app_name, 'domain': domain, 'path': path}
+            response = requests.post(f"{self.config['api_endpoint']}/install", json=payload, timeout=30)
             response.raise_for_status()
-            
             result = response.json()
-            self.logger.info(f"Application {app_name} installation initiated")
-            
-            return {
-                'status': 'success',
-                'message': f"{app_name} installation started",
-                'details': result
-            }
-        
+            self.logger.info(f"Installation of {app_name} initiated")
+            return {'status': 'success', 'message': f"{app_name} installation started", 'details': result}
         except requests.RequestException as e:
             error_msg = f"Installation failed: {e}"
             self.logger.error(error_msg)
-            return {
-                'status': 'error',
-                'message': error_msg
-            }
+            return {'status': 'error', 'message': error_msg}
 
     def get_application_details(self, app_name: str) -> Dict[str, Any]:
-        """
-        Retrieve detailed information about a specific application
-        
-        Args:
-            app_name (str): Name of the application
-        
-        Returns:
-            Application details dictionary
-        """
         try:
-            response = requests.get(
-                f"{self.config['api_endpoint']}/applications/{app_name}", 
-                timeout=10
-            )
+            response = requests.get(f"{self.config['api_endpoint']}/applications/{app_name}", timeout=10)
             response.raise_for_status()
-            
             details = response.json()
-            self.logger.info(f"Retrieved details for {app_name}")
-            
+            self.logger.info(f"Details for {app_name} retrieved")
             return details
-        
         except requests.RequestException as e:
             error_msg = f"Failed to retrieve {app_name} details: {e}"
             self.logger.error(error_msg)
             return {'error': error_msg}
 
-# Entry point for aaPanel plugin system
 def get_list(args):
     plugin = SoftaculousPlugin()
     return plugin.fetch_application_list()
 
 def install(args):
     plugin = SoftaculousPlugin()
-    return plugin.install_application(
-        args.get('application', ''),
-        args.get('domain', '')
-    )
+    return plugin.install_application(args.get('application', ''), args.get('domain', ''))
 
 def get_application_info(args):
     plugin = SoftaculousPlugin()
-    return plugin.get_application_details(
-        args.get('application', '')
-    )
+    return plugin.get_application_details(args.get('application', ''))
 EOF
         chmod +x "$PLUGIN_DIR/softaculous_main.py"
 
-        # Plugin Info
         cat > "$PLUGIN_DIR/info.json" << EOF
 {
     "title": "Softaculous Application Installer",
@@ -236,7 +167,6 @@ EOF
 }
 EOF
 
-        # Interactive Frontend
         cat > "$PLUGIN_DIR/index.html" << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
@@ -280,14 +210,8 @@ EOF
 
             fetch('/plugin/softaculous/install', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    application: application,
-                    domain: domain,
-                    path: path
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ application: application, domain: domain, path: path })
             })
             .then(response => response.json())
             .then(data => {
@@ -308,20 +232,17 @@ EOF
 </html>
 EOF
 
-        # Installation Script
         cat > "$PLUGIN_DIR/install.sh" << 'EOF'
 #!/bin/bash
 set -e
 
 PLUGIN_DIR="/www/server/panel/plugin/softaculous"
 
-# Ensure root privileges
 if [ "$(id -u)" != "0" ]; then
    echo "This script must be run as root" 1>&2
    exit 1
 fi
 
-# Dependency check
 check_dependencies() {
     local dependencies=("python3" "pip" "curl")
     for dep in "${dependencies[@]}"; do
@@ -332,126 +253,23 @@ check_dependencies() {
     done
 }
 
-# Install Python dependencies
 install_python_deps() {
     pip install requests PyYAML python-dotenv
 }
 
-# Main installation routine
 main() {
     echo "Starting Softaculous Plugin Installation..."
-    
     check_dependencies
     install_python_deps
-    
-    # Create plugin directory
-    mkdir -p "$PLUGIN_DIR"
-    
-    # Copy plugin files
-    cp softaculous_main.py "$PLUGIN_DIR/"
-    cp index.html "$PLUGIN_DIR/"
-    cp info.json "$PLUGIN_DIR/"
-    
-    # Set permissions
-    chown -R root:root "$PLUGIN_DIR"
-    chmod -R 755 "$PLUGIN_DIR"
-    
-    echo "Softaculous Plugin installed successfully!"
+    echo "Softaculous Plugin installed successfully."
 }
 
-# Execute main installation
 main
 EOF
+
         chmod +x "$PLUGIN_DIR/install.sh"
 
-        # Create placeholder icon
-        convert -size 128x128 xc:transparent -fill blue -draw "circle 64,64 64,16" "$PLUGIN_DIR/icon.png"
-
-        # Compress plugin
-        tar -czvf "softaculous-plugin-$VERSION.tar.gz" "$PLUGIN_DIR"
-
-    - name: Lint and Validate
+    - name: Build Docker Image
       run: |
-        pylint "$PLUGIN_DIR/softaculous_main.py" || true
-        python3 -m py_compile "$PLUGIN_DIR/softaculous_main.py"
-
-    - name: Create Release Package
-      run: |
-        VERSION=$(cat VERSION)
-        mkdir -p dist
-        cp "softaculous-plugin-$VERSION.tar.gz" dist/
-
-    - name: Upload Plugin Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: softaculous-aapanel-plugin
-        path: dist/
-        retention-days: 5
-
-  documentation:
-    needs: build-plugin
-    runs-on: ubuntu-latest
-    steps:
-    - name: Generate Documentation
-      run: |
-        cat > README.md << 'EOF'
-        # Softaculous aaPanel Plugin
-
-        ## Overview
-        Automate web application installations directly through aaPanel with Softaculous.
-
-        ## Features
-        - One-click installation of 400+ web applications
-        - Seamless aaPanel integration
-        - Comprehensive logging and error handling
-
-        ## Prerequisites
-        - aaPanel Linux Panel
-        - Python 3.11+
-        - Root/Administrator access
-
-        ## Installation
-        1. Download the plugin tarball
-        2. Upload to your aaPanel server
-        3. Run the installation script with root privileges
-        4. Access via aaPanel dashboard
-
-        ## Supported Applications
-        - WordPress
-        - Joomla
-        - Drupal
-        - And many more!
-
-        ## Troubleshooting
-        Check logs at `/var/log/softaculous_plugin.log`
-        EOF
-
-    - name: Upload Documentation
-      uses: actions/upload-artifact@v4
-      with:
-        name: documentation
-        path: README.md
-
-  release:
-    needs: [build-plugin, documentation]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-    - name: Download Artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: softaculous-aapanel-plugin
-
-    - name: Create GitHub Release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        VERSION=$(cat ../VERSION)
-        gh release create "v$VERSION" \
-          --title "Softaculous aaPanel Plugin v$VERSION" \
-          --notes "## Changelog
-        - Complete Softaculous plugin for aaPanel
-        - Automated installation and management
-        - Comprehensive error handling" \
-          softaculous-plugin-$VERSION.tar.gz
+        docker build -t softaculous-plugin:$VERSION .
+        docker push softaculous-plugin:$VERSION
