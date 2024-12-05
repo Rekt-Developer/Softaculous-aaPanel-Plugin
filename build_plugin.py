@@ -43,10 +43,14 @@ def validate_project_structure():
 
 def generate_version():
     """Generate the version from the VERSION file."""
-    with open('VERSION', 'r') as f:
-        version = f.read().strip()
-    logger.info(f"Current version: {version}")
-    return version
+    try:
+        with open('VERSION', 'r') as f:
+            version = f.read().strip()
+        logger.info(f"Current version: {version}")
+        return version
+    except FileNotFoundError:
+        logger.error("VERSION file not found")
+        raise
 
 def create_plugin_structure(version):
     """Create the comprehensive plugin structure."""
@@ -252,31 +256,47 @@ main
 
 def build_docker_image(version):
     """Build and push the Docker image."""
-    run_command(f'docker build -t softaculous-plugin:{version} .')
-    run_command(f'docker push softaculous-plugin:{version}')
-    logger.info(f"Built and pushed Docker image softaculous-plugin:{version}")
+    try:
+        run_command(f'docker build -t softaculous-plugin:{version} .')
+        run_command(f'docker push softaculous-plugin:{version}')
+        logger.info(f"Built and pushed Docker image softaculous-plugin:{version}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to build or push Docker image: {e}")
+        raise
 
 def commit_and_push_changes(version):
     """Commit and push changes to the repository."""
-    run_command('git add .')
-    run_command(f'git commit -m "Build and release version {version}"')
-    run_command('git push')
-    logger.info(f"Committed and pushed changes for version {version}")
+    try:
+        run_command('git add .')
+        run_command(f'git commit -m "Build and release version {version}"')
+        run_command('git push')
+        logger.info(f"Committed and pushed changes for version {version}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to commit and push changes: {e}")
+        raise
 
 def create_release(version):
     """Create a release on GitHub."""
-    run_command(f'gh release create v{version} --title "Release v{version}" --notes "Release version {version}"')
-    logger.info(f"Created release v{version}")
+    try:
+        run_command(f'gh release create v{version} --title "Release v{version}" --notes "Release version {version}"')
+        logger.info(f"Created release v{version}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to create release: {e}")
+        raise
 
 def main():
     """Main function to orchestrate the build process."""
-    validate_project_structure()
-    version = generate_version()
-    create_plugin_structure(version)
-    build_docker_image(version)
-    commit_and_push_changes(version)
-    create_release(version)
-    logger.info("Build and release process completed successfully")
+    try:
+        validate_project_structure()
+        version = generate_version()
+        create_plugin_structure(version)
+        build_docker_image(version)
+        commit_and_push_changes(version)
+        create_release(version)
+        logger.info("Build and release process completed successfully")
+    except Exception as e:
+        logger.error(f"Build and release process failed: {e}")
+        raise
 
 if __name__ == '__main__':
     main()
