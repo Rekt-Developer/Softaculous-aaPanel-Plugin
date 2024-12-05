@@ -41,6 +41,21 @@ def validate_project_structure():
             f.write('requests==2.31.0\nPyYAML==6.0.1\npython-dotenv==1.0.0\n')
         logger.info("Created requirements.txt file with initial dependencies")
 
+    if not os.path.exists('Dockerfile'):
+        with open('Dockerfile', 'w') as f:
+            f.write('''\
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY . /app
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+CMD ["python", "softaculous_main.py"]
+''')
+        logger.info("Created Dockerfile")
+
 def generate_version():
     """Generate the version from the VERSION file."""
     try:
